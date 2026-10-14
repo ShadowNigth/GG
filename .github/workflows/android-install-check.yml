@@ -1,0 +1,81 @@
+name: Diagnose published Android APK
+
+on:
+  workflow_dispatch: {}
+  push:
+    branches:
+      - arena/3fca91d3-gg
+    paths:
+      - '.github/workflows/android-install-check.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  install:
+    name: Install published APK on Android API ${{ matrix.api }}
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        api: [30, 35]
+    steps:
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Download the exact APK reported by the user
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          mkdir -p apk
+          gh release download apk-debug-4-1 --pattern pokesurvivor-debug.apk --dir apk
+          echo '2139c51228ef20943a64feb68bbaf80cb30cedb3b1e47ce1787ebbd3716129af  apk/pokesurvivor-debug.apk' | sha256sum -c -
+          unzip -t apk/pokesurvivor-debug.apk > zip-check.txt
+          echo "::notice::Published APK download matches SHA-256; ZIP integrity is valid."
+
+      - name: Verify manifest and signatures
+        run: |
+          TOOLS="$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -n 1 | xargs dirname)"
+          "$TOOLS/aapt" dump badging apk/pokesurvivor-debug.apk > manifest-check.txt
+          cat manifest-check.txt
+          set +e
+          "$TOOLS/apksigner" verify --verbose --print-certs apk/pokesurvivor-debug.apk > signature-check.txt 2>&1
+          result=$?
+          set -e
+          cat signature-check.txt
+          if [ "$result" -ne 0 ]; then
+            echo "::error::Signature validation failed: $(head -c 2000 signature-check.txt | tr '\n' ' ')"
+            exit "$result"
+          fi
+          echo "::notice::APK signatures verified successfully."
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Install and launch published APK
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ matrix.api }}
+          arch: x86_64
+          target: default
+          disable-animations: true
+          script: |
+            adb install apk/pokesurvivor-debug.apk > install-check.txt 2>&1 || { echo "::error::APK installation failed: $(cat install-check.txt | tr '\n' ' ')"; exit 1; }
+            cat install-check.txt
+            adb shell am start -W -n com.pokesurvivorfan.mobile/.MainActivity > launch-check.txt 2>&1
+            cat launch-check.txt
+            if ! grep -q 'Status: ok' launch-check.txt; then echo "::error::APK launch failed: $(cat launch-check.txt | tr '\n' ' ')"; exit 1; fi
+            echo "::notice::Published APK installed and launched successfully on Android API ${{ matrix.api }}."
+
+      - name: Upload diagnostic reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: install-check-api-${{ matrix.api }}
+          path: '*-check.txt'
