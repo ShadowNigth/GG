@@ -15,7 +15,8 @@
     "prebuild:web": "npm run assets:prepare",
     "assets:verify": "node scripts/verify-assets.js",
     "test": "node --test tests/*.test.js",
-    "test:browser": "node tests/offline-browser.cjs"
+    "test:browser": "node tests/offline-browser.cjs",
+    "test:audio": "node tests/audio-browser.cjs"
   },
   "dependencies": {
     "@capacitor/android": "^6.2.0",

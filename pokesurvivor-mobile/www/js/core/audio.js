@@ -15,6 +15,105 @@ G.Audio = (() => {
   let settings = { music: 0.55, sfx: 0.7, muted: false };
   try { Object.assign(settings, JSON.parse(localStorage.getItem(KEY) || '{}')); } catch (e) { /* nada */ }
   let noiseBuf = null;
+  const mobile = /Android|iPhone|iPad/i.test(navigator.userAgent || '') || !!window.Capacitor?.isNativePlatform?.();
+  const MAX_SOURCES = { music: 48, sfx: 24 };
+  const voices = new Set(), retiredBuses = new Map();
+  const sourceCounts = { music: 0, sfx: 0 };
+  let buildingVoice = null, nativeActive = true, resumePending = null;
+  let skippedSteps = 0, droppedVoices = 0;
+  const VOICE_LIMIT = new Error('audio voice budget');
+
+  // Todos los nodos temporales pertenecen a una nota/efecto. Los buses son permanentes.
+  function node(type) {
+    const voice = buildingVoice;
+    const source = type === 'Oscillator' || type === 'BufferSource';
+    if (voice && source && sourceCounts[voice.kind] >= MAX_SOURCES[voice.kind]) throw VOICE_LIMIT;
+    const n = ctx['create' + type]();
+    if (voice) {
+      voice.nodes.add(n);
+      if (source) {
+        voice.sources.add(n); sourceCounts[voice.kind]++;
+        n.onended = () => {
+          if (voice.sources.delete(n)) sourceCounts[voice.kind]--;
+          n.disconnect();
+          if (!voice.sources.size) disposeVoice(voice);
+        };
+      }
+    }
+    return n;
+  }
+
+  function endSource(source, time) {
+    if (buildingVoice) buildingVoice.end = Math.max(buildingVoice.end, time);
+    source.stop(time);
+  }
+
+  function disposeVoice(voice) {
+    if (!voices.delete(voice)) return;
+    for (const source of voice.sources) {
+      source.onended = null;
+      try { source.stop(); } catch (e) { /* fuente ya terminada o no iniciada */ }
+      sourceCounts[voice.kind]--;
+    }
+    voice.sources.clear();
+    for (const n of voice.nodes) n.disconnect();
+    voice.nodes.clear();
+  }
+
+  function playVoice(kind, owner, play) {
+    const voice = { kind, owner, nodes: new Set(), sources: new Set(), end: 0 };
+    voices.add(voice); buildingVoice = voice;
+    try { play(); }
+    catch (e) {
+      disposeVoice(voice);
+      if (e === VOICE_LIMIT) droppedVoices++;
+      else console.warn('[Audio] nota descartada:', e.message);
+    } finally {
+      buildingVoice = null;
+      if (!voice.sources.size) disposeVoice(voice);
+    }
+  }
+
+  function releaseBus(bus) {
+    for (const voice of voices) if (voice.owner === bus) disposeVoice(voice);
+    bus.disconnect(); retiredBuses.delete(bus);
+  }
+
+  function prune() {
+    // onended puede retrasarse si el hilo principal está ocupado; el reloj de audio manda.
+    for (const voice of voices) if (voice.end <= ctx.currentTime) disposeVoice(voice);
+    for (const [bus, end] of retiredBuses) if (end <= ctx.currentTime) releaseBus(bus);
+  }
+
+  const foreground = () => nativeActive && !document.hidden;
+
+  function resumeAudio() {
+    if (!ctx || !foreground() || ctx.state === 'closed' || resumePending) return;
+    if (ctx.state === 'running') { schedule(); return; }
+    resumePending = ctx.resume().then(() => {
+      if (!foreground()) return ctx.suspend();
+      schedule();
+    }).catch(() => { /* otro gesto del usuario volverá a intentar desbloquearlo */ })
+      .finally(() => { resumePending = null; });
+  }
+
+  function visibilityChanged() {
+    if (!ctx) return;
+    if (foreground()) { resumeAudio(); return; }
+    for (const voice of voices) disposeVoice(voice);
+    for (const bus of retiredBuses.keys()) releaseBus(bus);
+    if (current) current.next = ctx.currentTime + 0.05;
+    ctx.suspend().catch(() => {});
+  }
+  document.addEventListener('visibilitychange', visibilityChanged);
+  const app = window.Capacitor?.Plugins?.App;
+  if (app) {
+    try {
+      Promise.resolve(app.addListener('appStateChange', state => {
+        nativeActive = state.isActive; visibilityChanged();
+      })).catch(() => {});
+    } catch (e) { /* visibilitychange sigue disponible sin el plugin */ }
+  }
 
   function save() { try { localStorage.setItem(KEY, JSON.stringify(settings)); } catch (e) { /* nada */ } }
 
@@ -24,30 +123,29 @@ G.Audio = (() => {
     if (ctx) return true;
     const AC = window.AudioContext || window.webkitAudioContext;
     if (!AC) return false;
-    ctx = new AC();
+    ctx = new AC({ latencyHint: 'playback' });
+    ctx.addEventListener('statechange', () => { if (ctx.state === 'running') schedule(); });
     master = ctx.createDynamicsCompressor();
-    master.threshold.value = -14; master.ratio.value = 4;
-    const out = outNode = ctx.createGain(); out.gain.value = 0.9;
+    master.threshold.value = -18; master.ratio.value = 8;
+    master.knee.value = 12; master.attack.value = 0.004; master.release.value = 0.12;
+    const out = outNode = node('Gain'); out.gain.value = 0.8;
     master.connect(out).connect(ctx.destination);
 
-    musicBus = ctx.createGain(); sfxBus = ctx.createGain();
+    musicBus = node('Gain'); sfxBus = node('Gain');
     musicBus.connect(master); sfxBus.connect(master);
 
-    // Reverb: respuesta al impulso generada (ruido que se apaga en 1,8 s).
-    // Se rellena un momento después, a trozos: hacerlo de golpe bloqueaba la
-    // carga de la página (~75 ms). Hasta entonces la música suena sin eco.
-    reverb = ctx.createConvolver();
-    const len = Math.floor(ctx.sampleRate * 1.8);
-    const ir = ctx.createBuffer(2, len, ctx.sampleRate);
-    let ch = 0;
-    const fill = () => {
-      const d = ir.getChannelData(ch);
-      for (let i = 0; i < len; i++) { const g = 1 - i / len; d[i] = (Math.random() * 2 - 1) * g * g * Math.sqrt(g); }
-      if (++ch < 2) setTimeout(fill, 30); else reverb.buffer = ir;
-    };
-    setTimeout(fill, 300);
-    wet = ctx.createGain(); wet.gain.value = 0.3;
-    reverb.connect(wet).connect(musicBus);
+    // En Android se omite la convolución estéreo: las notas mantienen su timbre,
+    // sin el coste continuo del eco de 1,8 s en el hilo de audio del WebView.
+    if (!mobile) {
+      reverb = ctx.createConvolver();
+      const len = Math.floor(ctx.sampleRate * 0.6);
+      const ir = ctx.createBuffer(1, len, ctx.sampleRate);
+      const d = ir.getChannelData(0);
+      for (let i = 0; i < len; i++) { const g = 1 - i / len; d[i] = (Math.random() * 2 - 1) * g * g; }
+      reverb.buffer = ir;
+      wet = node('Gain'); wet.gain.value = 0.2;
+      reverb.connect(wet).connect(musicBus);
+    }
 
     noiseBuf = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
     const nd = noiseBuf.getChannelData(0);
@@ -59,9 +157,8 @@ G.Audio = (() => {
 
   function unlock() {
     if (!init()) return;
-    // 'suspended' o 'interrupted' (iPhone al volver de otra app): se reanuda.
-    if (ctx.state !== 'running') ctx.resume().catch(() => {});
     if (wanted && !current) startSong(wanted);
+    resumeAudio();
   }
   // En móvil, tocar la pantalla (pointerdown) no cuenta como gesto para el
   // sonido: sí levantar el dedo (pointerup / touchend). Se escuchan todos.
@@ -70,9 +167,12 @@ G.Audio = (() => {
   function applyVolumes() {
     if (!ctx) return;
     const t = ctx.currentTime;
+    for (const voice of voices) {
+      if (settings.muted || settings[voice.kind] <= 0) disposeVoice(voice);
+    }
     musicBus.gain.setTargetAtTime(settings.muted ? 0 : settings.music * 0.7, t, 0.05);
-    // Los efectos se generan bajitos: ×2,4 los pone a la par de la música (medido).
-    sfxBus.gain.setTargetAtTime(settings.muted ? 0 : settings.sfx * 2.4, t, 0.05);
+    // Margen para mezclar varios impactos sin saturar la salida del móvil.
+    sfxBus.gain.setTargetAtTime(settings.muted ? 0 : settings.sfx * 1.6, t, 0.05);
   }
 
   function setVolume(which, v) { settings[which] = G.U.clamp(v, 0, 1); save(); applyVolumes(); }
@@ -83,14 +183,14 @@ G.Audio = (() => {
   const midiFreq = m => 440 * Math.pow(2, (m - 69) / 12);
 
   function osc(type, f, t, end, dest) {
-    const o = ctx.createOscillator();
+    const o = node('Oscillator');
     o.type = type; o.frequency.setValueAtTime(f, t);
-    o.connect(dest); o.start(t); o.stop(end + 0.05);
+    o.connect(dest); o.start(t); endSource(o, end + 0.05);
     return o;
   }
 
   function gainEnv(dest, t, a, peak, dur, rel, sus = 0.7) {
-    const g = ctx.createGain();
+    const g = node('Gain');
     g.gain.setValueAtTime(0.0001, t);
     g.gain.linearRampToValueAtTime(peak, t + a);
     g.gain.setTargetAtTime(peak * sus, t + a, Math.max(0.02, dur * 0.4));
@@ -100,22 +200,23 @@ G.Audio = (() => {
   }
 
   function noise(t, dur, dest) {
-    const s = ctx.createBufferSource();
+    const s = node('BufferSource');
     s.buffer = noiseBuf;
-    s.connect(dest); s.start(t, Math.random() * 0.5); s.stop(t + dur + 0.05);
+    s.connect(dest); s.start(t, Math.random() * 0.5); endSource(s, t + dur + 0.05);
     return s;
   }
 
   function filt(type, f, q, dest) {
-    const b = ctx.createBiquadFilter();
+    const b = node('BiquadFilter');
     b.type = type; b.frequency.value = f; b.Q.value = q;
     b.connect(dest);
     return b;
   }
 
-  function send(node, amount) {
-    const s = ctx.createGain(); s.gain.value = amount;
-    node.connect(s).connect(reverb);
+  function send(from, amount) {
+    if (!reverb) return;
+    const s = node('Gain'); s.gain.value = amount;
+    from.connect(s).connect(reverb);
   }
 
   // ---------------- instrumentos ----------------
@@ -126,34 +227,34 @@ G.Audio = (() => {
       const g = gainEnv(lp, t, 0.045, 0.2 * v, d, 0.14, 0.82);
       send(g, 0.35);
       const o1 = osc('triangle', f, t, t + d + 0.3, g);
-      const g2 = ctx.createGain(); g2.gain.value = 0.18; g2.connect(g);
+      const g2 = node('Gain'); g2.gain.value = 0.18; g2.connect(g);
       const o2 = osc('sine', f * 2, t, t + d + 0.3, g2);
       // Vibrato que entra poco a poco, como un flautista.
-      const lfo = ctx.createOscillator(); lfo.frequency.value = 5.3;
-      const lg = ctx.createGain(); lg.gain.setValueAtTime(0, t);
+      const lfo = node('Oscillator'); lfo.frequency.value = 5.3;
+      const lg = node('Gain'); lg.gain.setValueAtTime(0, t);
       lg.gain.linearRampToValueAtTime(f * 0.007, t + Math.min(0.35, d));
       lfo.connect(lg); lg.connect(o1.frequency); lg.connect(o2.frequency);
-      lfo.start(t); lfo.stop(t + d + 0.35);
+      lfo.start(t); endSource(lfo, t + d + 0.35);
       // Soplo al atacar la nota.
       const bp = filt('bandpass', f * 2.2, 2, g);
-      const ng = ctx.createGain(); ng.gain.setValueAtTime(0.25, t); ng.gain.exponentialRampToValueAtTime(0.001, t + 0.08);
+      const ng = node('Gain'); ng.gain.setValueAtTime(0.25, t); ng.gain.exponentialRampToValueAtTime(0.001, t + 0.08);
       ng.connect(bp); noise(t, 0.09, ng);
     },
     bell(t, f, d, v, bus) {
-      const g = ctx.createGain(); g.connect(bus); send(g, 0.3);
+      const g = node('Gain'); g.connect(bus); send(g, 0.3);
       g.gain.setValueAtTime(0.0001, t);
       g.gain.linearRampToValueAtTime(0.22 * v, t + 0.004);
       g.gain.exponentialRampToValueAtTime(0.0008, t + Math.min(d, 0.45) + 0.45);
       osc('sine', f, t, t + 1, g);
-      const g2 = ctx.createGain(); g2.connect(g);
+      const g2 = node('Gain'); g2.connect(g);
       g2.gain.setValueAtTime(0.35, t); g2.gain.exponentialRampToValueAtTime(0.001, t + 0.09);
       osc('sine', f * 4, t, t + 0.12, g2);
     },
     pluck(t, f, d, v, bus) {
-      const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.Q.value = 2;
+      const lp = node('BiquadFilter'); lp.type = 'lowpass'; lp.Q.value = 2;
       lp.frequency.setValueAtTime(3200, t);
       lp.frequency.exponentialRampToValueAtTime(Math.max(300, f * 1.8), t + 0.22);
-      const g = ctx.createGain(); g.connect(bus); send(g, 0.2);
+      const g = node('Gain'); g.connect(bus); send(g, 0.2);
       g.gain.setValueAtTime(0.0001, t);
       g.gain.linearRampToValueAtTime(0.11 * v, t + 0.005);
       g.gain.exponentialRampToValueAtTime(0.0008, t + Math.min(d, 0.35) + 0.25);
@@ -164,7 +265,7 @@ G.Audio = (() => {
       const lp = filt('lowpass', 900, 0.7, bus);
       const g = gainEnv(lp, t, 0.008, 0.34 * v, d * 0.9, 0.08, 0.65);
       osc('triangle', f, t, t + d + 0.2, g);
-      const g2 = ctx.createGain(); g2.gain.value = 0.25; g2.connect(g);
+      const g2 = node('Gain'); g2.gain.value = 0.25; g2.connect(g);
       osc('square', f, t, t + d + 0.2, g2);
     },
     pad(t, f, d, v, bus) {
@@ -180,36 +281,36 @@ G.Audio = (() => {
       send(g, 0.2);
       const o1 = osc('square', f, t, t + d + 0.2, g);
       const o2 = osc('square', f * 1.006, t, t + d + 0.2, g);
-      const lfo = ctx.createOscillator(); lfo.frequency.value = 6;
-      const lg = ctx.createGain(); lg.gain.setValueAtTime(0, t);
+      const lfo = node('Oscillator'); lfo.frequency.value = 6;
+      const lg = node('Gain'); lg.gain.setValueAtTime(0, t);
       lg.gain.linearRampToValueAtTime(f * 0.008, t + 0.2);
       lfo.connect(lg); lg.connect(o1.frequency); lg.connect(o2.frequency);
-      lfo.start(t); lfo.stop(t + d + 0.25);
+      lfo.start(t); endSource(lfo, t + d + 0.25);
     },
     kick(t, v, bus) {
-      const g = ctx.createGain(); g.connect(bus);
+      const g = node('Gain'); g.connect(bus);
       g.gain.setValueAtTime(0.55 * v, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.22);
       const o = osc('sine', 150, t, t + 0.25, g);
       o.frequency.exponentialRampToValueAtTime(42, t + 0.13);
     },
     snare(t, v, bus) {
       const hp = filt('highpass', 1300, 0.7, bus);
-      const g = ctx.createGain(); g.connect(hp); send(g, 0.15);
+      const g = node('Gain'); g.connect(hp); send(g, 0.15);
       g.gain.setValueAtTime(0.22 * v, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.13);
       noise(t, 0.15, g);
-      const g2 = ctx.createGain(); g2.connect(bus);
+      const g2 = node('Gain'); g2.connect(bus);
       g2.gain.setValueAtTime(0.12 * v, t); g2.gain.exponentialRampToValueAtTime(0.001, t + 0.08);
       osc('triangle', 190, t, t + 0.1, g2);
     },
     hat(t, v, bus) {
       const hp = filt('highpass', 7500, 0.7, bus);
-      const g = ctx.createGain(); g.connect(hp);
+      const g = node('Gain'); g.connect(hp);
       g.gain.setValueAtTime(0.08 * v, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.045);
       noise(t, 0.05, g);
     },
     shaker(t, v, bus) {
       const bp = filt('bandpass', 5200, 1.2, bus);
-      const g = ctx.createGain(); g.connect(bp);
+      const g = node('Gain'); g.connect(bp);
       g.gain.setValueAtTime(0.0001, t);
       g.gain.linearRampToValueAtTime(0.07 * v, t + 0.012);
       g.gain.exponentialRampToValueAtTime(0.001, t + 0.07);
@@ -303,7 +404,7 @@ G.Audio = (() => {
   function startSong(name) {
     if (!ctx || !G.MUSIC[name]) return;
     const song = compiled[name] || (compiled[name] = compile(G.MUSIC[name]));
-    const bus = ctx.createGain();
+    const bus = node('Gain');
     bus.gain.setValueAtTime(0.0001, ctx.currentTime);
     bus.gain.linearRampToValueAtTime(1, ctx.currentTime + 0.8);
     bus.connect(musicBus);
@@ -316,7 +417,9 @@ G.Audio = (() => {
     b.gain.cancelScheduledValues(ctx.currentTime);
     b.gain.setValueAtTime(b.gain.value, ctx.currentTime);
     b.gain.linearRampToValueAtTime(0.0001, ctx.currentTime + 0.7);
-    setTimeout(() => b.disconnect(), 900);
+    retiredBuses.set(b, ctx.currentTime + 0.75);
+    // Los cambios rápidos de pantalla no acumulan temas todavía en fundido.
+    if (retiredBuses.size > 2) releaseBus(retiredBuses.keys().next().value);
     current = null;
   }
 
@@ -329,27 +432,38 @@ G.Audio = (() => {
     if (name) startSong(name);
   }
 
-  // Planificador: programa con 150 ms de antelación.
-  setInterval(() => {
-    if (!ctx || !current || ctx.state !== 'running') return;
-    const c = current, sd = 60 / c.song.bpm / 4;
-    while (c.next < ctx.currentTime + 0.15) {
+  // Planificador acotado: salta lo atrasado en vez de lanzar cientos de notas
+  // juntas tras un frame lento. 250 ms de margen toleran pequeños tirones.
+  function schedule() {
+    if (!ctx) return;
+    prune();
+    if (!current || !foreground() || ctx.state !== 'running' || settings.muted || settings.music <= 0) return;
+    const c = current, sd = 60 / c.song.bpm / 4, now = ctx.currentTime;
+    const earliest = now + 0.01;
+    if (c.next < earliest) {
+      const missed = Math.ceil((earliest - c.next) / sd);
+      c.step += missed; c.next += missed * sd; skippedSteps += missed;
+    }
+    let scheduled = 0;
+    while (c.next < now + 0.25 && scheduled++ < 8) {
       const i = c.step % c.song.steps;
-      // Swing: retrasa las corcheas a contratiempo.
       const t = c.next + (i % 4 === 2 ? c.song.swing * sd : 0);
       for (const e of c.song.ev[i]) {
-        if (e.drum) INST[e.inst](t, e.v, c.bus);
-        else INST[e.inst](t, e.f, e.len * sd, e.v, c.bus);
+        playVoice('music', c.bus, () => {
+          if (e.drum) INST[e.inst](t, e.v, c.bus);
+          else INST[e.inst](t, e.f, e.len * sd, e.v, c.bus);
+        });
       }
       c.next += sd;
       c.step++;
     }
-  }, 25);
+  }
+  setInterval(schedule, 25);
 
   // ---------------- efectos de sonido ----------------
 
   const last = {};
-  let xpCombo = 0, xpT = 0, voices = 0;
+  let xpCombo = 0, xpT = 0;
 
   const SHOT_PITCH = {
     fire: 520, water: 700, electric: 1100, psychic: 800, grass: 640, ice: 900, poison: 400,
@@ -359,7 +473,7 @@ G.Audio = (() => {
 
   function tone(type, f0, f1, dur, vol, at = 0, bus = sfxBus) {
     const t = ctx.currentTime + at;
-    const g = ctx.createGain(); g.connect(bus);
+    const g = node('Gain'); g.connect(bus);
     g.gain.setValueAtTime(0.0001, t);
     g.gain.linearRampToValueAtTime(vol, t + 0.006);
     g.gain.exponentialRampToValueAtTime(0.0005, t + dur);
@@ -369,10 +483,10 @@ G.Audio = (() => {
 
   function hiss(dur, vol, type, f0, f1, at = 0, q = 1) {
     const t = ctx.currentTime + at;
-    const b = ctx.createBiquadFilter(); b.type = type; b.Q.value = q;
+    const b = node('BiquadFilter'); b.type = type; b.Q.value = q;
     b.frequency.setValueAtTime(f0, t);
     if (f1) b.frequency.exponentialRampToValueAtTime(f1, t + dur);
-    const g = ctx.createGain(); b.connect(g); g.connect(sfxBus);
+    const g = node('Gain'); b.connect(g); g.connect(sfxBus);
     g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0005, t + dur);
     noise(t, dur, b);
   }
@@ -454,16 +568,15 @@ G.Audio = (() => {
   const MIN_GAP = { hit: 45, faint: 60, xp: 35, coin: 50, grass: 70, shot: 70, hover: 40, break: 60, judge: 80 };
 
   function sfx(name, opts) {
-    if (!ctx || settings.muted || settings.sfx <= 0 || ctx.state !== 'running') return;
+    if (!ctx || !foreground() || settings.muted || settings.sfx <= 0 || ctx.state !== 'running') return;
     const fn = SFX[name];
     if (!fn) return;
     const now = performance.now();
     const key = name === 'shot' && opts ? 'shot' + opts.kind : name;
     if (now - (last[key] || 0) < (MIN_GAP[name] || 0)) return;
-    if (voices > 24) return;                    // tope de voces simultáneas
+    prune();
     last[key] = now;
-    voices++; setTimeout(() => voices--, 150);
-    try { fn(opts); } catch (e) { /* un efecto nunca debe romper el juego */ }
+    playVoice('sfx', sfxBus, () => fn(opts || {}));
   }
 
   /** Para pruebas: mide pico y RMS de la salida durante `ms` milisegundos. */
@@ -502,6 +615,12 @@ G.Audio = (() => {
 
   return {
     music, sfx, setVolume, toggleMute, unlock, debugMeter, debugStream,
+    /** Contadores para pruebas de carga: no retienen nodos ni muestras de audio. */
+    debugState() {
+      return { voices: voices.size, sources: { ...sourceCounts }, retiredBuses: retiredBuses.size,
+        nodes: [...voices].reduce((n, v) => n + v.nodes.size, 0), skippedSteps, droppedVoices,
+        mobile, state: ctx ? ctx.state : 'uninitialized' };
+    },
     /** ¿Ya puede sonar? (el navegador sólo deja tras tocar algo, salvo excepciones) */
     canPlay() { return !!ctx && ctx.state === 'running'; },
     get settings() { return settings; },

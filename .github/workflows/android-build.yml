@@ -36,7 +36,7 @@ jobs:
       - name: Build offline web app
         run: npm run build:web
 
-      - name: Test local accounts
+      - name: Test local accounts and audio lifecycle
         run: npm test
 
       - name: Install browser for offline smoke test
@@ -44,6 +44,9 @@ jobs:
 
       - name: Test offline registration and persistence in production page
         run: npm run test:browser
+
+      - name: Stress-test Web Audio playback
+        run: npm run test:audio
 
       - name: Verify imported sprites
         run: npm run assets:verify
@@ -101,6 +104,7 @@ jobs:
 
           Descarga **pokesurvivor-debug.apk** en los archivos de esta publicación e instálalo en Android. No es necesario descargar el código fuente ni un ZIP.
 
+          - Audio 1.2: evita ráfagas de notas atrasadas, limita los sonidos simultáneos y libera los nodos al terminar. Menor carga en Android y reanudación al volver a la app.
           - Crea cuentas locales con nombre y contraseña, sin internet, correo ni servidor.
           - Cuenta y progreso guardados en este dispositivo; se restaura la sesión al abrir la app.
           - No hay Firebase, Google, ranking ni cooperativo online. El APK no tiene permiso de internet.

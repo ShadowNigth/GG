@@ -19,6 +19,12 @@ son independientes y no se importan automáticamente.
 escriben dentro del APK. Consulta [OFFLINE-ACCOUNTS.md](./OFFLINE-ACCOUNTS.md)
 para conocer los límites, las actualizaciones y las pruebas.
 
+## Audio durante partidas
+
+La versión Android **1.2-offline** limita los sonidos simultáneos, evita ráfagas
+de notas atrasadas y reduce el coste del sintetizador en móviles. Ver
+[AUDIO-NOTES.md](./AUDIO-NOTES.md) para los cambios y pruebas de carga.
+
 ## Arranque rápido
 
 ```bash
