@@ -262,7 +262,7 @@ label { display: block; font-size: 14px; color: var(--muted); margin: 8px 0 4px;
 @media (max-height: 660px) and (min-height: 521px) {
   .menu-right { width: min(500px, 52vw); }
   .menu-list { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 6px; }
-  .menu-item.play { grid-column: span 2; }
+  .menu-item.play, .menu-item[data-go="settings"] { grid-column: span 2; }
   .menu-item small { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .menu-left .logo .t1 { font-size: clamp(32px, 5vw, 52px); }
   #menu-partner { height: min(30vh, 200px); width: auto; }
@@ -724,6 +724,7 @@ a.btn { text-decoration: none; display: inline-block; color: var(--ink); }
   .menu-item { font-size: 15px; padding: 4px 6px; grid-template-columns: 22px 1fr; column-gap: 6px; }
   .menu-item small { font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .menu-item.play { grid-column: span 2; font-size: 21px; }
+  .menu-item[data-go="settings"] { grid-column: span 2; }
   .menu-item::before { display: none; }
   .mi-ico img { width: 20px; height: 20px; }
   .box.settings { max-height: calc(100dvh - 12px); }

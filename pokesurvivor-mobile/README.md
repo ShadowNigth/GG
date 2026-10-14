@@ -25,6 +25,13 @@ La versión Android **1.2-offline** limita los sonidos simultáneos, evita ráfa
 de notas atrasadas y reduce el coste del sintetizador en móviles. Ver
 [AUDIO-NOTES.md](./AUDIO-NOTES.md) para los cambios y pruebas de carga.
 
+## Menú offline (1.3)
+
+Se retiraron Novedades, Amigos, Ranking, Donaciones y Pantalla completa.
+Se mantienen Jugar, Pokémon, Mejoras, Gacha, Misiones y Ajustes, además de
+Sonido y Cerrar sesión. Tampoco se muestra el control web de pantalla completa
+en Ajustes; la orientación y la pantalla completa nativa de Android no cambian.
+
 ## Arranque rápido
 
 ```bash

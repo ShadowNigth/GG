@@ -6,7 +6,7 @@
 G.SettingsUI = (() => {
   const $ = G.UI.$;
   const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-  const VERSION = '1.2 · 2026-10-09';
+  const VERSION = '1.3-offline';
   const REPO = 'https://github.com/JPTER78/pokesurvivor';
   let tab = 'sound';
 
@@ -16,12 +16,7 @@ G.SettingsUI = (() => {
     $('btn-settings').innerHTML = G.Icons.html('gear', 20);
     $('btn-settings').onclick = () => open();
     $('btn-pause-settings').onclick = () => open('sound');
-    // Pantalla completa (si el navegador la permite; en iPhone, cómo conseguirla).
-    if (canFull() || iosTip()) {
-      $('btn-full').classList.remove('hidden');
-      $('btn-full').innerHTML = G.Icons.html('full', 20);
-      $('btn-full').onclick = toggleFull;
-    }
+
   }
 
   function open(t) {
@@ -31,27 +26,6 @@ G.SettingsUI = (() => {
   }
   function close() { $('scr-settings').classList.add('hidden'); }
   const isOpen = () => !$('scr-settings').classList.contains('hidden');
-
-  // ---------------- pantalla completa ----------------
-  function canFull() { return !!(document.fullscreenEnabled || document.webkitFullscreenEnabled); }
-  function isFull() { return !!(document.fullscreenElement || document.webkitFullscreenElement); }
-  // iPhone: Safari no deja poner una web a pantalla completa (por eso a veces
-  // no salía la opción). Sí se puede abriéndola desde la pantalla de inicio.
-  const IOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-  const standalone = () => !!navigator.standalone || (window.matchMedia && matchMedia('(display-mode: fullscreen), (display-mode: standalone)').matches);
-  function iosTip() { return IOS && !canFull() && !standalone(); }
-  const IOS_TIP = 'En iPhone, Safari no deja poner las webs a pantalla completa. Pulsa Compartir y luego "Añadir a pantalla de inicio": abriendo el juego desde ese icono se juega a pantalla completa.';
-  function toggleFull() {
-    if (!canFull()) { if (iosTip()) G.UI.toast(IOS_TIP, 9000); return; }
-    if (isFull()) (document.exitFullscreen || document.webkitExitFullscreen).call(document);
-    else {
-      const el = document.documentElement;
-      const p = (el.requestFullscreen || el.webkitRequestFullscreen).call(el);
-      // En móvil, además se intenta fijar la pantalla en horizontal.
-      if (p && p.then) p.then(() => { try { screen.orientation.lock('landscape').catch(() => {}); } catch (e) { /* nada */ } }).catch(() => {});
-    }
-    setTimeout(() => { if (isOpen()) render(); }, 300);
-  }
 
   // ---------------- piezas ----------------
   function section(title, sub) { return `<h3 class="set-h">${esc(title)}</h3>${sub ? `<p class="sub">${sub}</p>` : ''}`; }
@@ -82,10 +56,7 @@ G.SettingsUI = (() => {
         + section('Pantalla')
         + toggle('dmgNumbers', 'Números de daño', 'Los números que salen al golpear y al recibir daño.')
         + toggle('calm', 'Menos sacudidas y destellos', 'La cámara tiembla menos y los fogonazos son suaves.')
-        + toggle('fps', 'Mostrar FPS', 'Fotogramas por segundo, en la esquina de abajo.')
-        + (canFull() ? `<div class="set-row"><div class="grow"><b>Pantalla completa</b><small>Sin barras del navegador.</small></div>
-             <button class="btn small" id="set-full">${isFull() ? 'Salir' : 'Activar'}</button></div>`
-           : iosTip() ? `<div class="set-row"><div class="grow"><b>Pantalla completa</b><small>${esc(IOS_TIP)}</small></div></div>` : '');
+        + toggle('fps', 'Mostrar FPS', 'Fotogramas por segundo, en la esquina de abajo.');
     } else if (tab === 'ctl') {
       box.innerHTML = section('En móvil o tablet')
         + `<p class="sub">Pon el dedo en cualquier parte y arrastra para moverte: el joystick aparece donde tocas. Toca un ataque de abajo para cambiarlo y el botón de arriba a la derecha para pausar. Se juega en horizontal.</p>`
@@ -148,7 +119,6 @@ G.SettingsUI = (() => {
     box.querySelectorAll('.chip[data-k]').forEach(b => {
       b.onclick = () => { const v = b.dataset.v; G.Settings.set(b.dataset.k, isNaN(+v) ? v : +v); render(); };
     });
-    const full = $('set-full'); if (full) full.onclick = toggleFull;
     box.querySelectorAll('[data-lang]').forEach(b => { b.onclick = () => { if (b.dataset.lang !== G.I18n.lang) G.I18n.set(b.dataset.lang); }; });
     const lo = $('set-login'); if (lo) lo.onclick = () => { close(); leave(); };
     const out = $('set-logout'); if (out) out.onclick = () => { close(); leave(); };

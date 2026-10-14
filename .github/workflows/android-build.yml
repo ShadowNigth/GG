@@ -104,6 +104,7 @@ jobs:
 
           Descarga **pokesurvivor-debug.apk** en los archivos de esta publicación e instálalo en Android. No es necesario descargar el código fuente ni un ZIP.
 
+          - Menú 1.3: sin Novedades, Amigos, Ranking, Donaciones ni controles de pantalla completa.
           - Audio 1.2: evita ráfagas de notas atrasadas, limita los sonidos simultáneos y libera los nodos al terminar. Menor carga en Android y reanudación al volver a la app.
           - Crea cuentas locales con nombre y contraseña, sin internet, correo ni servidor.
           - Cuenta y progreso guardados en este dispositivo; se restaura la sesión al abrir la app.

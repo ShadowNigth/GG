@@ -11,6 +11,7 @@ G.NewsUI = (() => {
 
   function init() {
     const b = $('btn-news');
+    if (!b) return; // La edición offline no ofrece Novedades.
     b.innerHTML = G.Icons.html('book', 18) + ' <span>Novedades</span><i class="dot"></i>';
     b.onclick = open;
     $('news-close').onclick = close;
