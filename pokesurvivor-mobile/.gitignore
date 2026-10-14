@@ -1,0 +1,12 @@
+node_modules/
+android/app/build/
+android/build/
+android/.gradle/
+android/local.properties
+android/captures/
+*.apk
+*.aab
+design-src/
+www/assets/pokemon/*
+!www/assets/pokemon/README.md
+.DS_Store
