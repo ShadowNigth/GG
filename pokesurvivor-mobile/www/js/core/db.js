@@ -43,12 +43,12 @@ G.DB = (() => {
   // ---------------- almacenamiento local seguro ----------------
 
   function read(k) {
-    try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : null; }
+    try { const v = localStorage.getItem(k); const value = v ? JSON.parse(v) : null; storageOk = true; return value; }
     catch (e) { storageOk = false; return null; }
   }
   function write(k, v) {
     const s = JSON.stringify(v);
-    try { localStorage.setItem(k, s); return true; }
+    try { localStorage.setItem(k, s); storageOk = true; return true; }
     catch (e) {
       // Navegador lleno (sobre todo por lo que guarda el ranking): se libera lo
       // prescindible y se reintenta. Antes la copia de la partida dejaba de
@@ -58,7 +58,7 @@ G.DB = (() => {
           const key = localStorage.key(i);
           if (key && /^ps\.rk\.c\./.test(key)) localStorage.removeItem(key);
         }
-        localStorage.setItem(k, s); return true;
+        localStorage.setItem(k, s); storageOk = true; return true;
       } catch (e2) { storageOk = false; return false; }
     }
   }
@@ -232,7 +232,17 @@ G.DB = (() => {
   //                               MODO LOCAL
   // =====================================================================
 
-  async function hash(pass, salt) {
+  const LOCAL_ERROR = 'No se pudo guardar en este dispositivo. Comprueba el espacio disponible e inténtalo de nuevo.';
+
+  async function hash(pass, salt, algorithm) {
+    if (algorithm === 'pbkdf2-sha256') {
+      const encoder = new TextEncoder();
+      const material = await crypto.subtle.importKey('raw', encoder.encode(pass), 'PBKDF2', false, ['deriveBits']);
+      const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', salt: encoder.encode(salt),
+        iterations: 210000, hash: 'SHA-256' }, material, 256);
+      return [...new Uint8Array(bits)].map(b => b.toString(16).padStart(2, '0')).join('');
+    } // Las cuentas locales anteriores conservan su hash para poder entrar.
+
     const text = salt + ':' + pass;
     if (window.crypto && crypto.subtle) {
       const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
@@ -259,30 +269,41 @@ G.DB = (() => {
   }
 
   function beginLocal(k, name) {
-    key = k; user = name; guest = false;
-    save = loadLocal(k, name);
-    write(K_SES, k);
+    const next = loadLocal(k, name);
+    if (!storageOk || !write(K_SES, k)) return false;
+    key = k; user = name; guest = false; save = next;
+    setSync('local');
+    return true;
   }
 
   async function registerLocal(name, pass) {
     const accs = read(K_ACC) || {};
+    if (!storageOk) return { ok: false, error: LOCAL_ERROR };
     const k = name.toLowerCase();
-    if (accs[k]) return { ok: false, error: 'Ese nombre ya existe.' };
-    const salt = randomSalt();
-    accs[k] = { name, salt, hash: await hash(pass, salt), created: Date.now() };
-    if (!write(K_ACC, accs)) return { ok: false, error: 'El navegador no deja guardar datos (¿modo incógnito?).' };
-    beginLocal(k, name);
-    write(K_SAVE + k, save);
+    if (Object.hasOwn(accs, k)) return { ok: false, error: 'Ese nombre ya existe en este dispositivo.' };
+    if (!window.crypto?.subtle) return { ok: false, error: 'Este dispositivo no permite crear contraseñas seguras.' };
+    const salt = randomSalt(), algorithm = 'pbkdf2-sha256';
+    const record = { name, salt, algorithm, hash: await hash(pass, salt, algorithm), created: Date.now() };
+    // No anunciar éxito si falla la cuenta, la partida inicial o la sesión.
+    if (!write(K_SAVE + k, newSave(name))) return { ok: false, error: LOCAL_ERROR };
+    if (!write(K_ACC, { ...accs, [k]: record })) {
+      remove(K_SAVE + k);
+      return { ok: false, error: LOCAL_ERROR };
+    }
+    if (!beginLocal(k, name)) {
+      write(K_ACC, accs); remove(K_SAVE + k);
+      return { ok: false, error: LOCAL_ERROR };
+    }
     return { ok: true, isNew: true };
   }
 
   async function loginLocal(name, pass) {
-    const accs = read(K_ACC) || {};
-    const acc = accs[name.toLowerCase()];
-    if (!acc || acc.hash !== await hash(pass || '', acc.salt)) {
+    const accs = read(K_ACC) || {}, k = name.toLowerCase();
+    const acc = Object.hasOwn(accs, k) ? accs[k] : null;
+    if (!acc || acc.hash !== await hash(pass || '', acc.salt, acc.algorithm)) {
       return { ok: false, error: 'Usuario o contraseña incorrectos.' };
     }
-    beginLocal(name.toLowerCase(), acc.name);
+    if (!beginLocal(k, acc.name)) return { ok: false, error: LOCAL_ERROR };
     return { ok: true, isNew: !save.partner };
   }
 
@@ -290,9 +311,8 @@ G.DB = (() => {
     const k = read(K_SES);
     if (!k) return false;
     const accs = read(K_ACC) || {};
-    if (!accs[k]) { remove(K_SES); return false; }
-    beginLocal(k, accs[k].name);
-    return true;
+    if (!Object.hasOwn(accs, k)) { remove(K_SES); return false; }
+    return beginLocal(k, accs[k].name);
   }
 
   /** Partida de una cuenta local antigua, si el nombre y la contraseña coinciden. */
@@ -341,6 +361,7 @@ G.DB = (() => {
   }
 
   async function initCloud() {
+    if (G.OFFLINE) { localReason = 'offline-app'; return false; }
     const cfg = G.FIREBASE_CONFIG;
     if (!/^https?:$/.test(location.protocol)) { localReason = 'file'; return false; }
     if (!cfg || !cfg.apiKey || !cfg.projectId) { localReason = 'config'; return false; }
@@ -566,7 +587,18 @@ G.DB = (() => {
     readyP = (async () => {
       try { if (await initCloud()) mode = 'cloud'; }
       catch (e) { console.warn('[DB] sin nube:', e.message); localReason = 'error'; mode = 'local'; }
-      if (mode === 'local') { setSync('local'); return restoreLocal(); }
+      if (mode === 'local') {
+        setSync('local');
+        // WebView: guardar también al pasar a segundo plano, sin depender de red.
+        document.addEventListener('visibilitychange', () => { if (document.hidden) commit(); });
+        addEventListener('pagehide', () => commit());
+        const app = window.Capacitor?.Plugins?.App;
+        if (app) {
+          try { await app.addListener('appStateChange', state => { if (!state.isActive) commit(); }); }
+          catch (e) { console.warn('[DB] lifecycle nativo no disponible:', e.message); }
+        }
+        return restoreLocal();
+      }
       const u = await new Promise(res => { const off = auth.onAuthStateChanged(x => { off(); res(x); }); });
       if (!u) return false;
       try { await openCloud(u); return true; }
@@ -642,7 +674,12 @@ G.DB = (() => {
   function commit(urgent = false) {
     if (guest || !key || !save) return false;
     save.updated = Date.now();
-    if (mode === 'local') return write(K_SAVE + key, save);
+    if (mode === 'local') {
+      const ok = write(K_SAVE + key, save);
+      setSync(ok ? 'local' : 'error');
+      if (!ok && G.UI) G.UI.toast(LOCAL_ERROR, 6000);
+      return ok;
+    }
     write(K_CLOUD + uid, save);
     pending = true;
     setSync('pending');
@@ -669,7 +706,7 @@ G.DB = (() => {
     setSync(mode === 'cloud' ? 'ok' : 'local');
   }
 
-  function nameAccount() { return !!(auth && auth.currentUser && (auth.currentUser.email || '').endsWith('@' + NAME_DOMAIN)); }
+  function nameAccount() { if (mode === 'local') return !!key && !guest; return !!(auth && auth.currentUser && (auth.currentUser.email || '').endsWith('@' + NAME_DOMAIN)); }
 
   /*
    * Recuperar la cuenta: las de nombre y contraseña no tienen correo de verdad
@@ -704,8 +741,12 @@ G.DB = (() => {
     if (guest || !key) return { ok: false, error: 'No hay cuenta que borrar.' };
     if (mode === 'local') {
       const accs = read(K_ACC) || {};
+      const acc = Object.hasOwn(accs, key) ? accs[key] : null;
+      if (!acc || acc.hash !== await hash(pass || '', acc.salt, acc.algorithm)) {
+        return { ok: false, error: 'Contraseña incorrecta.' };
+      }
       delete accs[key];
-      write(K_ACC, accs);
+      if (!write(K_ACC, accs)) return { ok: false, error: LOCAL_ERROR };
       remove(K_SAVE + key); remove(K_SES);
       user = key = save = null;
       return { ok: true };

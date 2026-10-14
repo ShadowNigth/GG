@@ -6,14 +6,16 @@
   "scripts": {
     "sync": "cap sync android",
     "open:android": "cap open android",
-    "build:web": "node www/tools/build.js",
+    "build:web": "node www/tools/build.js --sin-seo",
     "android:debug": "cd android && ./gradlew assembleDebug",
     "android:release": "cd android && ./gradlew assembleRelease",
     "assets:prepare": "node scripts/prepare-assets.js",
     "postinstall": "npm run assets:prepare",
     "presync": "npm run assets:prepare",
     "prebuild:web": "npm run assets:prepare",
-    "assets:verify": "node scripts/verify-assets.js"
+    "assets:verify": "node scripts/verify-assets.js",
+    "test": "node --test tests/*.test.js",
+    "test:browser": "node tests/offline-browser.cjs"
   },
   "dependencies": {
     "@capacitor/android": "^6.2.0",
@@ -23,6 +25,7 @@
     "@capacitor/status-bar": "^6.0.1"
   },
   "devDependencies": {
-    "@capacitor/cli": "^6.2.0"
+    "@capacitor/cli": "^6.2.0",
+    "playwright": "1.64.1"
   }
 }

@@ -8,16 +8,17 @@ juego, pantalla completa, sin barra de navegador, ícono propio en el launcher,
 splash screen, y el botón "atrás" de Android mapeado al menú de pausa en vez
 de cerrar la app de golpe.
 
-## Qué se portó tal cual (motor y lógica del juego)
+## Motor de juego y cambios del port
 
 Todo lo que en el proyecto original está bajo licencia MIT (`js/`, `css/`,
 `index.html`, `tools/`): cámara, físicas, IA de enemigos, oleadas, subida de
 nivel, gacha, logros, misiones, clima, grietas/legendarios, HUD, menús,
-ajustes, cooperativo online, ranking y cuentas (Firebase). No se tocó la
-lógica de juego, sólo la capa de arranque/empaquetado para Android.
+ajustes y módulos de red. En la edición 1.1 se activaron exclusivamente las
+cuentas locales, se mejoró su persistencia y se deshabilitaron los servicios
+online. Ver [OFFLINE-ACCOUNTS.md](./OFFLINE-ACCOUNTS.md).
 
 - `www/` = el sitio del juego, copiado del original (motor completo).
-- `www/js/capacitor-bridge.js` = lo único añadido: conecta el juego con los
+- `www/js/capacitor-bridge.js` = capa nativa: conecta el juego con los
   plugins nativos (oculta splash, oculta barra de estado, botón atrás →
   pausa). Si abres `www/` en un navegador normal (sin Capacitor), este
   archivo no hace nada: el juego sigue funcionando igual que siempre.
@@ -57,13 +58,16 @@ estilo; el original está en `design-src/icon-master.png`.
 a `pokesurvivor.com`, imagen `og-image.jpg`, etc.): no aplican dentro de una
 app nativa, así que se quitaron del `index.html` portado.
 
-## Cómo compilarla (necesitas Android Studio/SDK — no se puede compilar un
-## APK en este entorno porque no tiene SDK de Android ni acceso de red a
-## Google/Gradle)
+## Cómo compilarla
+
+El workflow de GitHub Actions compila, prueba y publica el APK en GitHub
+Releases. Para compilar localmente necesitas Android Studio/SDK y Java 17.
 
 ```bash
 cd pokesurvivor-mobile
-npm install                 # instala Capacitor (ya hecho en este repo)
+npm install                 # instala Capacitor y extrae los assets
+npm run build:web           # genera index.html y app.min.js con cuentas offline
+npm test
 # 1) restaura los sprites incluidos y sincroniza:
 npm run sync
 
@@ -84,23 +88,16 @@ depuración activada y usa `./gradlew installDebug`.
 - **Orientación**: se bloqueó a horizontal (`sensorLandscape`) en
   `AndroidManifest.xml`, que es como ya está pensado el juego (el aviso de
   "Gira el móvil" del original ya no hace falta).
-- **Permisos**: sólo `INTERNET` (para Firebase/cooperativo/ranking); el juego
-  no pide cámara, ubicación ni nada más.
-- **Entrar con Google** (`signInWithPopup` en `js/core/db.js`): dentro de una
-  WebView embebida, Google suele bloquear este flujo
-  ("disallowed_useragent"). Entrar con usuario+contraseña (la opción
-  "invitado"/cuenta normal del juego) funciona igual que en el navegador. Si
-  quieres arreglar también el login con Google dentro de la app, hace falta
-  el plugin `@capacitor-firebase/authentication` (usa Custom Tabs/flujo
-  nativo) y que el dueño del proyecto Firebase (`pokesurvivor-free`) registre
-  la huella SHA-1 de tu build en la consola de Firebase; no es algo que yo
-  pueda hacer por ti porque no es mi proyecto de Firebase.
-- **Backend en vivo**: el juego sigue hablando con los servicios reales del
-  proyecto original (`pokesurvivor-free` en Firebase, `turn.pokesurvivor.com`
-  en Cloudflare) — es el mismo backend que usa la web, no uno mío ni tuyo.
-  Para uso personal no debería ser un problema, pero ten en cuenta que
-  ranking/cooperativo dependen de que ese servicio siga disponible y acepte
-  tráfico desde la app.
+- **Permisos**: el APK offline no tiene permiso de internet. Se verifica en CI.
+- **Cuentas**: nombre y contraseña locales, progreso por cuenta en el WebView,
+  sin inicializar Firebase ni comunicarse con el backend original.
+- **Sesión**: se recupera al reiniciar. Se guarda también al pasar a segundo plano.
+- **Red**: Google, amigos, cooperativo, ranking y actualización web automática
+  no están disponibles. Para actualizar se instala un APK nuevo.
+- **Datos**: desinstalar o borrar datos los elimina. Las actualizaciones requieren
+  el mismo ID y firma para conservarlos; los APK debug actuales pueden cambiar
+  de firma entre builds. No hay recuperación por servidor ni migración automática
+  desde cuentas de la web. Ver `OFFLINE-ACCOUNTS.md`.
 
 ## Licencias (igual que el original, ver `www/assets/pokemon/README.md` y el
 ## `LICENSE` del repo de JPTER78)

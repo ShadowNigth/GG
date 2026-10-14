@@ -24,7 +24,7 @@ G.Updater = (() => {
   let pending = false, lastCheck = 0, timer = 0, counting = false;
 
   async function check() {
-    if (!mine || pending) return;
+    if (G.OFFLINE || !mine || pending) return;
     lastCheck = Date.now();
     try {
       const r = await fetch('version.json?t=' + Date.now(), { cache: 'no-store' });
@@ -71,7 +71,7 @@ G.Updater = (() => {
   }
 
   function init() {
-    if (!mine || !location.protocol.startsWith('http')) return;
+    if (G.OFFLINE || !mine || !location.protocol.startsWith('http')) return;
     clearInterval(timer);
     timer = setInterval(loop, 2000);
     document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && Date.now() - lastCheck > 60000) check(); });

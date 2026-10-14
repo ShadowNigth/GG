@@ -23,3 +23,9 @@ Las compilaciones usan claves de depuración que pueden cambiar; una
 actualización con firma diferente requiere desinstalar la anterior, lo que
 borra sus datos locales. Los sprites son para uso no comercial y requieren
 atribución; consulta los créditos y licencias incluidos en el proyecto.
+
+## Cuentas sin internet
+
+La edición offline permite crear cuentas con nombre y contraseña y guardar su
+progreso sólo en el dispositivo. No usa Firebase ni servidores y el APK no tiene
+permiso de internet. Ver [cuentas offline y límites del guardado](./pokesurvivor-mobile/OFFLINE-ACCOUNTS.md).

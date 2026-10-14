@@ -6,6 +6,7 @@
   /** ¿Se puede usar lo online? Si no, explica por qué. */
   function needOnline() {
     if (G.DB.online) return true;
+    if (G.OFFLINE) { G.UI.toast('El cooperativo, los amigos y el ranking no están disponibles en esta edición offline.', 4000); return false; }
     G.UI.toast(G.DB.guest ? 'Crea una cuenta para jugar con amigos y salir en el ranking.'
       : 'Esto necesita la versión online del juego (con la nube).', 3200);
     return false;

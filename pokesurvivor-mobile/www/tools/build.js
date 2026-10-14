@@ -14,7 +14,7 @@ const ROOT = path.join(__dirname, '..');
 const DEV = path.join(ROOT, 'dev.html'), OUT = path.join(ROOT, 'index.html');
 const BEGIN = '<!-- scripts:begin -->', END = '<!-- scripts:end -->';
 
-const dev = fs.readFileSync(DEV, 'utf8');
+const dev = fs.readFileSync(DEV, 'utf8').replace(/\r\n/g, '\n');
 const i = dev.indexOf(BEGIN), j = dev.indexOf(END);
 if (i < 0 || j < 0) throw new Error('dev.html no tiene las marcas ' + BEGIN + ' / ' + END);
 const block = dev.slice(i, j + END.length);

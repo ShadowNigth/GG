@@ -2,16 +2,29 @@
 
 Port a Android (vía [Capacitor](https://capacitorjs.com/)) del juego web
 **PokéSurvivor** ([JPTER78/pokesurvivor](https://github.com/JPTER78/pokesurvivor)):
-mismo motor y mismo código de juego (MIT), empaquetado como app nativa en vez
-de página web.
+Motor de juego MIT empaquetado como app nativa, ahora con **cuentas offline**
+y progreso guardado en el dispositivo, sin internet ni servidores.
 
 Lee **[PORT-NOTES.md](./PORT-NOTES.md)** antes de nada: explica qué se portó
 tal cual, los assets de terceros incluidos y cómo compilarlo.
+
+## Cuentas offline
+
+Pulsa **Crear cuenta offline** y elige nombre y contraseña. La app recuerda la
+última sesión y guarda el progreso por cuenta en su almacenamiento privado.
+No hay Google, ranking ni cooperativo online. Las cuentas de la web original
+son independientes y no se importan automáticamente.
+
+**Desinstalar la app o borrar sus datos elimina el progreso.** Los datos no se
+escriben dentro del APK. Consulta [OFFLINE-ACCOUNTS.md](./OFFLINE-ACCOUNTS.md)
+para conocer los límites, las actualizaciones y las pruebas.
 
 ## Arranque rápido
 
 ```bash
 npm install
+npm run build:web
+npm test
 npm run sync
 npx cap open android      # Android Studio: Run ▶
 ```

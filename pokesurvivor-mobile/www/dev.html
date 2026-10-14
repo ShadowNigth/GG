@@ -5,7 +5,7 @@
 <meta charset="utf-8">
 <meta name="robots" content="noindex">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>PokéSurvivor – Juego Pokémon gratis online estilo Survivor.io</title>
+<title>PokéSurvivor — Offline</title>
 <meta name="description" content="Sobrevive a hordas de Pokémon con tu compañero en este fan game gratis para navegador y móvil: 966 Pokémon, shinies, legendarios y cooperativo con amigos. Sin descargas ni anuncios.">
 <!-- seo:begin -->
 <link rel="canonical" href="https://pokesurvivor.com/">
@@ -40,7 +40,6 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="PokéSurvivor">
-<link rel="preconnect" href="https://www.gstatic.com" crossorigin>
 <link rel="preload" href="assets/fonts/PixelifyPS-400.ttf" as="font" type="font/ttf" crossorigin>
 <link rel="preload" href="assets/fonts/PixelifyPS-700.ttf" as="font" type="font/ttf" crossorigin>
 <!-- seo:begin -->
@@ -93,17 +92,17 @@
       <div class="t1">PokéSurvivor</div>
       <div class="t2">Mundo Misterioso</div>
     </div>
-    <p class="login-tag">Sobrevive a las hordas con tu compañero Pokémon · gratis, en PC y móvil</p>
+    <p class="login-tag">Cuentas offline · juega y guarda en este dispositivo</p>
     <div class="tabs">
       <div class="tab on" data-tab="login">Entrar</div>
-      <div class="tab" data-tab="register">Crear cuenta</div>
+      <div class="tab" data-tab="register">Crear cuenta offline</div>
     </div>
     <p id="signup-closed" class="note center hidden"></p>
     <form id="login-form" autocomplete="off">
-      <label for="f-user">Nombre</label>
-      <input id="f-user" class="field" maxlength="16" spellcheck="false">
+      <label for="f-user">Nombre de cuenta local</label>
+      <input id="f-user" class="field" required minlength="3" maxlength="16" spellcheck="false">
       <label for="f-pass">Contraseña</label>
-      <input id="f-pass" class="field" type="password" maxlength="64">
+      <input id="f-pass" class="field" type="password" required maxlength="64">
       <p id="login-err" class="err"></p>
       <p class="note"><a href="#" id="f-forgot">¿Olvidaste tu contraseña?</a></p>
       <p id="forgot-note" class="note hidden">Si vinculaste tu Gmail, pulsa <b>Entrar con Google</b> con ese Gmail: es tu misma cuenta.
@@ -275,20 +274,15 @@
     <p>Si eres titular de derechos y quieres que retiremos algo, escríbenos y lo quitaremos lo
       antes posible: <a id="legal-mail" href="#"></a></p>
     <p>Código fuente: <a id="legal-repo" href="#" target="_blank" rel="noopener"></a></p>
-    <h3>Privacidad</h3>
-    <p>Si creas una cuenta, guardamos tu nombre de jugador y tu partida (colección, monedas,
-      mejoras y estadísticas) en Google Firebase para que puedas seguir en cualquier ordenador.
-      Si entras con Google, Firebase guarda también tu correo de Google para identificarte
-      (nunca se enseña a otros jugadores).
-      No usamos tus datos para nada más, ni los compartimos, ni hay publicidad ni seguimiento.
-      Como invitado no se guarda nada fuera de tu navegador.</p>
-    <p>Amigos y ranking: tu <b>apodo</b> es público para otros jugadores. Guardamos tu lista de
-      amigos, si estás en línea y tus mejores tiempos (con tu apodo y tu Pokémon).</p>
-    <p>Partidas en grupo: tu navegador se conecta <b>directamente</b> con el de tus compañeros
-      (como en una videollamada), así que cada uno puede llegar a ver la dirección IP del otro.
-      Juega en grupo sólo con gente que conozcas. Si la conexión directa no es posible, la partida
-      pasa por los servidores de Firebase.</p>
-    <p>Puedes borrar tu cuenta cuando quieras (se borran también tu apodo, tus amigos y tus marcas):</p>
+    <h3>Privacidad — edición offline</h3>
+    <p>El nombre, la contraseña derivada con sal (no en texto plano) y el progreso se guardan
+      sólo en el almacenamiento privado de esta app en este dispositivo. No se envían a Firebase
+      ni a ningún servidor. No necesitas correo ni conexión para crear una cuenta o jugar.</p>
+    <p>Las cuentas no se sincronizan entre dispositivos. Esta edición no tiene login con Google,
+      ranking ni cooperativo online. Las cuentas de la web original son independientes.</p>
+    <p>Al desinstalar la app o borrar sus datos se eliminan las cuentas y el progreso local.
+      No hay recuperación de contraseña por internet. Como invitado el progreso no se guarda.</p>
+    <p>Puedes borrar tu cuenta y su progreso desde aquí:</p>
     <div class="row">
       <button class="btn small" id="legal-delete">Borrar mi cuenta y mi partida</button>
       <span id="legal-del-msg" class="note" style="margin:0"></span>
@@ -556,6 +550,7 @@
 </section>
 
 <!-- datos generados -->
+<script defer src="js/capacitor-bridge.js"></script>
 <!-- scripts:begin -->
 <script defer src="js/core/util.js"></script>
 <script defer src="js/core/i18n.js"></script>

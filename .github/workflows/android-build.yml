@@ -33,6 +33,18 @@ jobs:
       - name: Install JS deps
         run: npm ci
 
+      - name: Build offline web app
+        run: npm run build:web
+
+      - name: Test local accounts
+        run: npm test
+
+      - name: Install browser for offline smoke test
+        run: npx playwright install --with-deps chromium
+
+      - name: Test offline registration and persistence in production page
+        run: npm run test:browser
+
       - name: Verify imported sprites
         run: npm run assets:verify
 
@@ -45,6 +57,16 @@ jobs:
       - name: Build debug APK
         working-directory: pokesurvivor-mobile/android
         run: ./gradlew assembleDebug --no-daemon
+
+      - name: Verify APK has no internet permission
+        run: |
+          AAPT="$(find "$ANDROID_HOME/build-tools" -name aapt -type f | sort -V | tail -n 1)"
+          "$AAPT" dump permissions android/app/build/outputs/apk/debug/app-debug.apk > apk-permissions.txt
+          cat apk-permissions.txt
+          if grep -q 'android.permission.INTERNET' apk-permissions.txt; then
+            echo "La edición offline no debe tener permiso de internet."
+            exit 1
+          fi
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
@@ -75,10 +97,14 @@ jobs:
         run: |
           mv apk/app-debug.apk apk/pokesurvivor-debug.apk
           cat > release-notes.md <<'NOTES'
-          ## PokeSurvivor para Android
+          ## PokeSurvivor para Android — cuentas offline
 
           Descarga **pokesurvivor-debug.apk** en los archivos de esta publicación e instálalo en Android. No es necesario descargar el código fuente ni un ZIP.
 
+          - Crea cuentas locales con nombre y contraseña, sin internet, correo ni servidor.
+          - Cuenta y progreso guardados en este dispositivo; se restaura la sesión al abrir la app.
+          - No hay Firebase, Google, ranking ni cooperativo online. El APK no tiene permiso de internet.
+          - Desinstalar la app o borrar sus datos elimina el progreso. No hay recuperación de contraseña ni migración automática de cuentas de la web.
           - Incluye los 13.468 sprites de Pokémon, verificados antes de compilar.
           - Versión de depuración firmada con la clave de debug: no es una versión para Google Play.
           - Android puede pedir autorización para instalar aplicaciones de esta fuente.
@@ -87,7 +113,7 @@ jobs:
           NOTES
           gh release create "$RELEASE_TAG" apk/pokesurvivor-debug.apk \
             --target "$SOURCE_SHA" \
-            --title "PokeSurvivor Android — $RELEASE_TAG" \
+            --title "PokeSurvivor Android offline — $RELEASE_TAG" \
             --notes-file release-notes.md \
             --prerelease
           echo "### APK para descargar" >> "$GITHUB_STEP_SUMMARY"

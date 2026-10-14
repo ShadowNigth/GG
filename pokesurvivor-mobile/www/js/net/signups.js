@@ -31,7 +31,7 @@ G.Signups = (() => {
 
   const month = () => new Date(Date.now() - 8 * 3600e3).toISOString().slice(0, 7);
   const OFF = true;
-  const enabled = () => !OFF && /^https?:$/.test(location.protocol) && !(G.FIREBASE_CONFIG || {}).emulator;
+  const enabled = () => !G.OFFLINE && !OFF && /^https?:$/.test(location.protocol) && !(G.FIREBASE_CONFIG || {}).emulator;
   const reportedKey = uid => 'ps.mau.' + uid + '.' + month();
 
   function remember(j) {

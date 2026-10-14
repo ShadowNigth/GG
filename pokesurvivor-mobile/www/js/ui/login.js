@@ -12,11 +12,14 @@ G.LoginUI = (() => {
       $('login-err').textContent = '';
       $('btn-auth').disabled = true;
       const fn = mode === 'login' ? G.DB.login : G.DB.register;
-      const r = await fn($('f-user').value, $('f-pass').value);
-      $('btn-auth').disabled = false;
-      if (!r.ok) { $('login-err').textContent = r.error; return; }
-      $('f-pass').value = '';
-      G.Flow.afterLogin();
+      try {
+        const r = await fn($('f-user').value, $('f-pass').value);
+        if (!r.ok) { $('login-err').textContent = r.error; return; }
+        $('f-pass').value = '';
+        G.Flow.afterLogin();
+      } catch (error) {
+        $('login-err').textContent = 'No se pudo abrir la cuenta local. Comprueba el almacenamiento e inténtalo de nuevo.';
+      } finally { $('btn-auth').disabled = false; }
     };
     $('btn-guest').onclick = () => { G.DB.playAsGuest(); G.Flow.afterLogin(); };
     $('f-forgot').onclick = e => {
@@ -65,6 +68,7 @@ G.LoginUI = (() => {
 
   /** Explica dónde se guarda la partida según el modo de la base de datos. */
   function modeNote() {
+    if (G.OFFLINE) return 'Cuenta offline: tu progreso se guarda sólo en este dispositivo, sin internet ni servidor. Al desinstalar la app o borrar sus datos se pierde. Como invitado no se guarda.';
     if (G.DB.mode === 'cloud') return 'Tu partida se guarda en la nube: entra desde cualquier ordenador. Como invitado no se guarda.';
     const why = G.DB.localReason === 'file'
       ? 'Abierto desde un archivo: la partida sólo se guarda en este navegador. Para guardar en la nube, juega en la versión publicada.'
@@ -76,8 +80,9 @@ G.LoginUI = (() => {
 
   function setMode(m) {
     mode = m;
+    $('f-pass').minLength = m === 'register' ? (G.DB.mode === 'cloud' ? 6 : 4) : 0;
     document.querySelectorAll('#scr-login .tab').forEach(t => t.classList.toggle('on', t.dataset.tab === m));
-    $('btn-auth').textContent = m === 'login' ? 'Entrar' : 'Crear cuenta';
+    $('btn-auth').textContent = m === 'login' ? 'Entrar' : (G.OFFLINE ? 'Crear cuenta offline' : 'Crear cuenta');
     $('f-pass').autocomplete = m === 'login' ? 'current-password' : 'new-password';
     $('login-err').textContent = '';
     // Sólo se pregunta si quedan plazas al ir a crear cuenta (cada llamada al Worker cuenta).
@@ -104,9 +109,14 @@ G.LoginUI = (() => {
     if (G.DB.mode === 'cloud' && G.Signups) {
       if (G.Signups.closed) G.Signups.check().then(applySignups); else applySignups(true);
     }
-    if (!G.DB.storageOk) $('login-err').textContent = 'Este navegador no deja guardar datos: juega como invitado.';
+    if (!G.DB.storageOk) $('login-err').textContent = 'No se puede guardar en este dispositivo: comprueba el espacio disponible. Como invitado no se guarda.';
     $('btn-google').classList.toggle('hidden', G.DB.mode !== 'cloud');
     $('login-mode').textContent = modeNote();
+    if (G.OFFLINE) {
+      $('forgot-note').textContent = 'Esta cuenta existe sólo en este dispositivo. No hay recuperación por correo ni Google: recuerda tu contraseña. Puedes crear otra cuenta, pero tendrá un progreso independiente.';
+      $('f-pass').minLength = mode === 'register' ? 4 : 0;
+    }
+    setMode(mode);
     setTimeout(() => $('f-user').focus(), 50);
   }
 
