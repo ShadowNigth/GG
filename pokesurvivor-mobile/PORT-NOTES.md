@@ -30,19 +30,25 @@ de una app empaquetada (el juego ya muestra esa misma información en sus
 propios menús in-game). Si las quieres igualmente, están en el repo original
 y se pueden copiar a `www/` sin cambios (también son código MIT).
 
-## Qué NO se copió (y por qué)
+## Assets importados
 
-**`assets/pokemon/` (~103 MB, ~13.400 imágenes).** Son sprites de
-[SpriteCollab](https://github.com/PMDCollab/SpriteCollab) bajo CC BY-NC 4.0,
-y representan personajes que son marca de Nintendo/Creatures/GAME FREAK. No
-es código mío ni tuyo: es un recurso de terceros con su propia licencia, así
-que no lo dupliqué en bloque dentro de este port. El motor de sprites ya
-tolera que falten (no rompe nada, sólo no dibuja esa animación), y dejé
-`scripts/import-pokemon-assets.sh` para que lo completes tú copiando tu
-propia copia local del repo original — ver `www/assets/pokemon/README.md`.
+Se incluyeron los **13.468 sprites** de `assets/pokemon/` del commit
+`b29708900da26b34e70d2dc07ad1659a719f4a78` de JPTER78/pokesurvivor, sin modificar.
+Se guardan comprimidos en `vendor/pokemon.tar.gz` (~54 MiB) para evitar
+versionar miles de imágenes sueltas. `npm install`, `npm ci` y `npm run sync`
+los restauran automáticamente en `www/assets/pokemon/`; también puedes usar
+`npm run assets:prepare`. Las imágenes extraídas permanecen ignoradas por Git.
+
+Se preservan `www/LICENSE` y `www/CREDITS.md` del original: los sprites son
+CC BY-NC 4.0 según ese repositorio (uso no comercial y atribución).
+Se añadió `assets/og-image.jpg`; las fuentes ya eran idénticas al original.
+Ver `vendor/README.md` para la procedencia y cómo verificar la importación.
+
+## Elementos propios del port
 
 **Iconos de la app (launcher, splash, favicon).** Los del proyecto original
-usan una Poké Ball (también marca registrada). Se generaron iconos 100%
+usan una Poké Ball y se han conservado en `www/assets/upstream-icons/`,
+sin activarlos. Para este port se generaron iconos 100%
 nuevos y originales (un rayo pixel-art) para esta app, en
 `www/assets/icons/` y `android/.../res/mipmap-*`. Cámbialos si quieres otro
 estilo; el original está en `design-src/icon-master.png`.
@@ -58,9 +64,8 @@ app nativa, así que se quitaron del `index.html` portado.
 ```bash
 cd pokesurvivor-mobile
 npm install                 # instala Capacitor (ya hecho en este repo)
-# 1) pon tus sprites (ver www/assets/pokemon/README.md):
-./scripts/import-pokemon-assets.sh /ruta/a/tu/clon/de/pokesurvivor
-npx cap sync android
+# 1) restaura los sprites incluidos y sincroniza:
+npm run sync
 
 # 2a) desde Android Studio:
 npx cap open android        # abre android/ en Android Studio y dale a Run
@@ -102,8 +107,8 @@ depuración activada y usa `./gradlew installDebug`.
 
 - Código del juego: MIT (JPTER78).
 - Iconos/splash de esta app: originales, hechos para este port.
-- Sprites de Pokémon: no incluidos aquí; CC BY-NC 4.0 de SpriteCollab si los
-  añades tú.
+- Sprites de Pokémon: incluidos en el bundle; CC BY-NC 4.0 de SpriteCollab,
+  con atribuciones en `www/CREDITS.md` (uso no comercial).
 - "Pokémon" y los personajes: marcas de Nintendo/Creatures/GAME FREAK. Este
   port, como el original, es un proyecto de fan sin ánimo de lucro, no
   afiliado ni aprobado por ellos.

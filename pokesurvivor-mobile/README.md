@@ -6,21 +6,26 @@ mismo motor y mismo código de juego (MIT), empaquetado como app nativa en vez
 de página web.
 
 Lee **[PORT-NOTES.md](./PORT-NOTES.md)** antes de nada: explica qué se portó
-tal cual, qué se dejó fuera a propósito (los sprites de Pokémon, con licencia
-de terceros) y cómo completarlo y compilarlo.
+tal cual, los assets de terceros incluidos y cómo compilarlo.
 
 ## Arranque rápido
 
 ```bash
 npm install
-./scripts/import-pokemon-assets.sh /ruta/a/tu/clon/de/pokesurvivor   # ver abajo
-npx cap sync android
+npm run sync
 npx cap open android      # Android Studio: Run ▶
 ```
 
-`import-pokemon-assets.sh` copia tu copia local de `assets/pokemon/` (sprites
-de personajes Pokémon, no incluidos en este repo por ser contenido de
-terceros): ver `www/assets/pokemon/README.md`.
+`npm install` / `npm ci` extraen automáticamente los **13.468 sprites**
+del bundle local `vendor/pokemon.tar.gz` a `www/assets/pokemon/`.
+No necesitas clonar el proyecto original. Para restaurarlos sin instalar
+dependencias: `npm run assets:prepare` (requiere Node.js y `tar` en el PATH).
+`npm run sync` también los restaura antes de sincronizar Android.
+
+Se copiaron también los créditos, la licencia y `assets/og-image.jpg`.
+Las fuentes ya eran idénticas. Los iconos originales están en
+`www/assets/upstream-icons/`; se conservan los iconos propios del port como
+iconos activos. Ver [procedencia y licencias](./vendor/README.md).
 
 ## Vista previa en navegador (sin Android Studio)
 
@@ -28,7 +33,8 @@ terceros): ver `www/assets/pokemon/README.md`.
 empaquetado, sin instalar nada de Android, basta con:
 
 ```bash
-cd www && python3 -m http.server 8080
+npm run assets:prepare
+cd www && python3 -m http.server 8080 --bind 0.0.0.0
 ```
 
 y abrir `http://localhost:8080/` (usa el joystick táctil o el ratón). El
@@ -41,6 +47,7 @@ hace nada.
 pokesurvivor-mobile/
 ├─ www/                  # el juego (motor MIT portado tal cual + bridge nativo)
 ├─ android/              # proyecto nativo generado por Capacitor
+├─ vendor/               # bundle de sprites + procedencia y checksum
 ├─ scripts/
 │  └─ import-pokemon-assets.sh
 ├─ design-src/           # arte original del icono (no se sube al APK)

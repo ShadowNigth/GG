@@ -4,7 +4,7 @@ on:
   workflow_dispatch: {}
   push:
     branches:
-      - arena/3104bf1b-gg
+      - arena/3fca91d3-gg
     paths:
       - 'pokesurvivor-mobile/**'
       - '.github/workflows/android-build.yml'
@@ -30,8 +30,11 @@ jobs:
       - name: Install JS deps
         run: npm ci
 
+      - name: Verify imported sprites
+        run: npm run assets:verify
+
       - name: Sync Capacitor (copy www/ into android/)
-        run: npx cap sync android
+        run: npm run sync
 
       - name: Make gradlew executable
         run: chmod +x android/gradlew

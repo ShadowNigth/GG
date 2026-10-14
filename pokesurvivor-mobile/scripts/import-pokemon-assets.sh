@@ -1,14 +1,9 @@
 #!/usr/bin/env bash
-# Copia tu propia copia local de assets/pokemon (sprites de SpriteCollab,
-# licencia CC BY-NC, ver www/assets/pokemon/README.md) dentro del proyecto
-# Android. No la trae este repo: son ~103 MB de sprites de personajes de
-# Pokémon (terceros, no redistribuibles por mí dentro de este port).
-#
-# Uso:
-#   ./scripts/import-pokemon-assets.sh /ruta/a/tu/clon/de/pokesurvivor
-#
-# Ese "ruta" es la carpeta donde tengas clonado https://github.com/JPTER78/pokesurvivor
-# (la que trae la carpeta assets/pokemon con ~13.400 archivos .png).
+# Importación opcional desde otro clon local. Para los sprites incluidos:
+#   npm run assets:prepare
+# Sprites CC BY-NC 4.0; ver www/CREDITS.md y www/LICENSE.
+# Este comando sólo cambia la copia de trabajo, no el bundle versionado.
+# Uso: ./scripts/import-pokemon-assets.sh /ruta/a/pokesurvivor
 set -euo pipefail
 SRC="${1:-}"
 if [ -z "$SRC" ] || [ ! -d "$SRC/assets/pokemon" ]; then

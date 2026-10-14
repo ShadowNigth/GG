@@ -8,7 +8,12 @@
     "open:android": "cap open android",
     "build:web": "node www/tools/build.js",
     "android:debug": "cd android && ./gradlew assembleDebug",
-    "android:release": "cd android && ./gradlew assembleRelease"
+    "android:release": "cd android && ./gradlew assembleRelease",
+    "assets:prepare": "node scripts/prepare-assets.js",
+    "postinstall": "npm run assets:prepare",
+    "presync": "npm run assets:prepare",
+    "prebuild:web": "npm run assets:prepare",
+    "assets:verify": "node scripts/verify-assets.js"
   },
   "dependencies": {
     "@capacitor/android": "^6.2.0",

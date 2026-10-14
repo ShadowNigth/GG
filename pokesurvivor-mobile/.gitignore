@@ -10,3 +10,6 @@ design-src/
 www/assets/pokemon/*
 !www/assets/pokemon/README.md
 .DS_Store
+
+# Copias generadas por Capacitor (los originales viven en www/).
+android/app/src/main/assets/

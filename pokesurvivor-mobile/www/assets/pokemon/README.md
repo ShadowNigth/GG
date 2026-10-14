@@ -1,40 +1,26 @@
-# Esta carpeta va vacía a propósito
+# Sprites de Pokémon
 
-El juego original carga aquí ~13.400 sprites (uno por Pokémon y variante:
-Idle/Walk/Attack/Shoot/Charge/Hurt/Faint, normal y shiny). Son arte de
-[SpriteCollab](https://github.com/PMDCollab/SpriteCollab) (estilo Mundo
-Misterioso), con licencia CC BY-NC 4.0, y representan personajes que son
-marca y propiedad de Nintendo / Creatures Inc. / GAME FREAK. No vienen
-incluidos en este port: no es contenido mío para copiar en bloque dentro de
-otro repositorio, con o sin fines de distribución.
+Esta carpeta recibe los **13.468 PNG** importados de
+[JPTER78/pokesurvivor](https://github.com/JPTER78/pokesurvivor), commit
+`b29708900da26b34e70d2dc07ad1659a719f4a78`, sin modificar.
 
-El juego funciona igual sin ellos (el motor de sprites de `js/core/sprites.js`
-ya tolera imágenes que faltan: reintenta en segundo plano y no rompe nada),
-pero las pantallas se ven sin arte de los Pokémon hasta que pongas tú tu
-propia copia.
-
-## Cómo rellenarla
-
-Si ya tienes clonado `https://github.com/JPTER78/pokesurvivor` en tu máquina,
-desde la raíz de `pokesurvivor-mobile` ejecuta:
+Desde `pokesurvivor-mobile/` ejecuta:
 
 ```bash
-./scripts/import-pokemon-assets.sh /ruta/a/tu/clon/de/pokesurvivor
-npx cap sync android
+npm run assets:prepare
+npm run assets:verify
+npm run sync
 ```
 
-Eso copia su carpeta `assets/pokemon/` (misma estructura de subcarpetas:
-`assets/pokemon/<id>/<Animación>.png` y `assets/pokemon/<id>/s/<Animación>.png`
-para las shiny) dentro de este proyecto y hace que Android la empaquete.
+`npm install` / `npm ci` los extraen automáticamente desde el bundle local
+`vendor/pokemon.tar.gz`. No hace falta descargar otro repositorio. Los PNG
+extraídos se ignoran en Git; el bundle es la copia persistente y reproducible.
+Las rutas originales (`<id>/<Animación>.png` y `<id>/s/<Animación>.png`)
+son las que utiliza el motor del juego.
 
-Si no la tienes clonada:
-
-```bash
-git clone https://github.com/JPTER78/pokesurvivor.git /tmp/pokesurvivor
-./scripts/import-pokemon-assets.sh /tmp/pokesurvivor
-```
-
-Recuerda que esos sprites siguen bajo CC BY-NC 4.0 (uso no comercial, con
-atribución a SpriteCollab) y que "Pokémon" y los personajes son marcas de
-Nintendo/Creatures/GAME FREAK: este port, igual que el original, es un
-proyecto de fan sin ánimo de lucro y sin afiliación con ellos.
+Sprites de [SpriteCollab](https://github.com/PMDCollab/SpriteCollab), bajo
+[CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/) según el
+repositorio original: **uso no comercial y con atribución**. Créditos completos
+en [CREDITS.md](../../CREDITS.md) y condiciones en [LICENSE](../../LICENSE).
+Pokémon y sus personajes son propiedad de Nintendo/Creatures/GAME FREAK/
+The Pokémon Company; este port no está afiliado ni aprobado por ellos.

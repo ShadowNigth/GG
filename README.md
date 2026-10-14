@@ -7,5 +7,5 @@ juego web [JPTER78/pokesurvivor](https://github.com/JPTER78/pokesurvivor).
 
 Ver [`pokesurvivor-mobile/README.md`](./pokesurvivor-mobile/README.md) y
 [`pokesurvivor-mobile/PORT-NOTES.md`](./pokesurvivor-mobile/PORT-NOTES.md)
-para el detalle: qué se portó, qué se dejó fuera a propósito (sprites de
-Pokémon, de terceros) y cómo compilarlo.
+para el detalle de los assets importados, sus licencias y cómo compilarlo.
+Los sprites se incluyen en un bundle local y se extraen con `npm install`.

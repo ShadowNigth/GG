@@ -1,0 +1,10 @@
+{
+  "repository": "https://github.com/JPTER78/pokesurvivor",
+  "commit": "b29708900da26b34e70d2dc07ad1659a719f4a78",
+  "sourcePath": "assets/pokemon",
+  "archive": "pokemon.tar.gz",
+  "sha256": "8cfbb71c77a779f27be2f4be427e07a012a5b1575b74c76fbe7308e96e6e7a9e",
+  "files": 13468,
+  "license": "CC-BY-NC-4.0 (según LICENSE del repositorio original)",
+  "credits": "../www/CREDITS.md"
+}
