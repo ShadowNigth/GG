@@ -9,6 +9,9 @@ on:
       - 'pokesurvivor-mobile/**'
       - '.github/workflows/android-build.yml'
 
+permissions:
+  contents: read
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -49,3 +52,43 @@ jobs:
           name: pokesurvivor-debug-apk
           path: pokesurvivor-mobile/android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
+
+  release:
+    name: Publish downloadable APK
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download verified build
+        uses: actions/download-artifact@v4
+        with:
+          name: pokesurvivor-debug-apk
+          path: apk
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          SOURCE_SHA: ${{ github.sha }}
+          RELEASE_TAG: apk-debug-${{ github.run_number }}-${{ github.run_attempt }}
+        run: |
+          mv apk/app-debug.apk apk/pokesurvivor-debug.apk
+          cat > release-notes.md <<'NOTES'
+          ## PokeSurvivor para Android
+
+          Descarga **pokesurvivor-debug.apk** en los archivos de esta publicación e instálalo en Android. No es necesario descargar el código fuente ni un ZIP.
+
+          - Incluye los 13.468 sprites de Pokémon, verificados antes de compilar.
+          - Versión de depuración firmada con la clave de debug: no es una versión para Google Play.
+          - Android puede pedir autorización para instalar aplicaciones de esta fuente.
+          - La clave de depuración puede cambiar entre compilaciones. Si Android rechaza una actualización por firma incompatible, desinstalar la versión anterior borra sus datos locales.
+          - Sprites CC BY-NC 4.0 según el proyecto original: uso no comercial y con atribución. Créditos y licencia incluidos en la app y en el repositorio.
+          NOTES
+          gh release create "$RELEASE_TAG" apk/pokesurvivor-debug.apk \
+            --target "$SOURCE_SHA" \
+            --title "PokeSurvivor Android — $RELEASE_TAG" \
+            --notes-file release-notes.md \
+            --prerelease
+          echo "### APK para descargar" >> "$GITHUB_STEP_SUMMARY"
+          echo "https://github.com/$GH_REPO/releases/download/$RELEASE_TAG/pokesurvivor-debug.apk" >> "$GITHUB_STEP_SUMMARY"
